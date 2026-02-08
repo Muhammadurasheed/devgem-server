@@ -272,11 +272,17 @@ class DeploymentService:
             if self.broadcaster and status in ["live", "failed"]:
                 import asyncio
                 event_type = "deployment_complete" if status == "live" else "status_change"
-                asyncio.create_task(self.broadcaster({
-                    "type": event_type,
-                    "deployment": dep.to_dict()
-                }))
-                print(f"[DeploymentService] [BROADCAST] {event_type} for {deployment_id}")
+                payload = {"type": event_type, "deployment": dep.to_dict()}
+                
+                # [FAANG] Safe Broadcast: Wrapped to catch silent failures
+                async def safe_broadcast():
+                    try:
+                        await self.broadcaster(payload)
+                        print(f"[DeploymentService] [BROADCAST] {event_type} for {deployment_id} - SUCCESS")
+                    except Exception as e:
+                        print(f"[DeploymentService] [BROADCAST] FAILED for {deployment_id}: {e}")
+                
+                asyncio.create_task(safe_broadcast())
 
 
     async def update_deployment_stage_status(self, deployment_id: str, stage_id: str, status: str):

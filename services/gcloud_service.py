@@ -1234,17 +1234,21 @@ class GCloudService:
             # Use name 'main' for the container
             container.name = "main"
             
-            # CRITICAL FIX: Dynamic port detection (explicit, env_vars PORT, or default 8000)
-            # Defaulting to 8000 for standard FastAPI/Uvicorn compatibility in DevGem
-            detected_port = container_port or 8000
-            if env_vars and 'PORT' in env_vars:
+            # [FAANG] Universal Port Detection: Single Source of Truth
+            # Priority: 1) Explicit container_port, 2) env_vars PORT, 3) Cloud Run standard 8080
+            if container_port:
+                detected_port = container_port
+                self.logger.info(f"[Port] Using explicit container_port: {detected_port}")
+            elif env_vars and 'PORT' in env_vars:
                 try:
                     detected_port = int(env_vars['PORT'])
-                    self.logger.info(f"[Diagnostic] PORT found in env_vars: {detected_port}")
+                    self.logger.info(f"[Port] Using env_vars PORT: {detected_port}")
                 except (ValueError, TypeError):
-                    self.logger.warning(f"Invalid PORT in env_vars, using {detected_port}")
-            
-            self.logger.info(f"Using container port: {detected_port}")
+                    detected_port = 8080
+                    self.logger.warning(f"[Port] Invalid PORT in env_vars, fallback to {detected_port}")
+            else:
+                detected_port = 8080
+                self.logger.info(f"[Port] Using Cloud Run standard: {detected_port}")
             container.ports = [run_v2.ContainerPort(container_port=detected_port, name='http1')]
             
             # Add environment variables
