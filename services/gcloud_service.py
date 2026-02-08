@@ -1234,8 +1234,9 @@ class GCloudService:
             # Use name 'main' for the container
             container.name = "main"
             
-            # CRITICAL FIX: Dynamic port detection (explicit, env_vars PORT, or default 8080)
-            detected_port = container_port or 8080
+            # CRITICAL FIX: Dynamic port detection (explicit, env_vars PORT, or default 8000)
+            # Defaulting to 8000 for standard FastAPI/Uvicorn compatibility in DevGem
+            detected_port = container_port or 8000
             if env_vars and 'PORT' in env_vars:
                 try:
                     detected_port = int(env_vars['PORT'])
@@ -2227,6 +2228,17 @@ class GCloudService:
                     for entry in get_entries(heartbeat_expr):
                         p = entry.payload
                         logs.append(f"[{entry.severity}] {entry.log_name}: {json.dumps(p) if isinstance(p, dict) else str(p)}")
+
+                # LAYER 5: The "Bottom Trawl" (Universal Container Logs)
+                if not logs:
+                    self.logger.info(f"[Diagnostic] SOVEREIGN FALLBACK: Trawling for ANY container logs in {start_time} window...")
+                    trawl_expr = f'resource.type="cloud_run_revision" AND timestamp>="{start_time}"'
+                    for entry in get_entries(trawl_expr):
+                        p = entry.payload
+                        msg = json.dumps(p) if isinstance(p, dict) else str(p)
+                        # Filter for potential relevance
+                        if "error" in msg.lower() or "fail" in msg.lower() or "port" in msg.lower():
+                            logs.append(f"[{entry.severity}] {entry.log_name} [UNCERTAIN]: {msg}")
 
                 # FINAL: Reverse and Print
                 results = logs[::-1]

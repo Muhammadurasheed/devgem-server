@@ -1101,7 +1101,19 @@ class OrchestratorAgent:
                 print(f"[Orchestrator] [WARNING] Terminal pulse failed: {e}")
 
         # [SUCCESS] CRITICAL: Format into a natural response, don't just return the dict data
-        if deploy_result.get('type') == 'error':
+        # [SUCCESS] SOVEREIGN STATUS SYNC: Ensure database reflects failure ground truth
+        if deploy_result.get('type') == 'error' or deploy_result.get('success') is False:
+            if deployment_id:
+                try:
+                    print(f"[Orchestrator] ⚠️ SOVEREIGN SYNC: Marking deployment {deployment_id} as FAILED")
+                    error_msg = deploy_result.get('message') or deploy_result.get('content') or "Deployment failed"
+                    await deployment_service.update_deployment_status(
+                        deployment_id=deployment_id,
+                        status=DeploymentStatus.FAILED,
+                        error_message=error_msg
+                    )
+                except Exception as sync_err:
+                    print(f"[Orchestrator] Failed to sync failure status: {sync_err}")
             return deploy_result
             
         return {
