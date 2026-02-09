@@ -664,7 +664,9 @@ class OrchestratorAgent:
         deployment_id: Optional[str] = None, # [FAANG] Pass-through authoritative ID
         abort_event: Optional[asyncio.Event] = None, # [FAANG] Emergency Abort Control
         root_dir: str = '', # [FAANG] Monorepo Support
-        commit_metadata: Optional[Dict[str, str]] = None # [FAANG] Git History
+        commit_metadata: Optional[Dict[str, str]] = None, # [FAANG] Git History
+        repo_url: Optional[str] = None, # [FAANG] Override for Auto-Deploy
+        service_name: Optional[str] = None # [FAANG] Override for Auto-Deploy
     ) -> Dict[str, Any]:
         """
         Logic for direct deployment when intent is confirmed.
@@ -711,18 +713,22 @@ class OrchestratorAgent:
             progress_callback = smooth_wrapper
 
         # Extract service name from context if it was provided via service_name_provided event
-        custom_service_name = self.project_context.get('custom_service_name')
-        repo_url = self.project_context.get('repo_url')
+        custom_service_name = service_name or self.project_context.get('custom_service_name')
+        repo_url = repo_url or self.project_context.get('repo_url')
         
         if custom_service_name:
             service_name = custom_service_name
-            print(f"[Orchestrator] Using CUSTOM service name: {service_name}")
+            print(f"[Orchestrator] Using service name: {service_name}")
         elif repo_url:
             base_name = repo_url.split('/')[-1].replace('.git', '').replace('_', '-').lower()
             service_name = base_name
         else:
             base_name = "servergem-app"
             service_name = base_name
+            
+        # [FAANG] Ensure repo_url is in context for downstream services
+        if repo_url:
+            self.project_context['repo_url'] = repo_url
             
         # Force function call results
         # [SUCCESS] DirectFunctionCall: Encapsulates function call data for orchestrated execution
