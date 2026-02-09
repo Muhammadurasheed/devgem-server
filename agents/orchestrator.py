@@ -593,9 +593,21 @@ class OrchestratorAgent:
         print(f"[Orchestrator] Found target deployment: {existing_dep.service_name} ({existing_dep.id})")
         
         # 2. Trigger Redeploy
-        # We reuse _direct_deploy but with the existing ID to ensure UPDATE semantics
+        # [FAANG] RE-DEPLOYMENT STAGING: Inform service layer to reset status and update metadata
+        # This triggers the global broadcast so the dashboard reflects the update IMMEDIATELY.
         try:
-            # [FAANG] Proactive Notification
+            print(f"[Orchestrator] Staging re-deployment for {existing_dep.service_name}...")
+            await deployment_service.create_deployment(
+                service_name=existing_dep.service_name,
+                repo_url=repo_url,
+                deployment_id=existing_dep.id,
+                commit_metadata=commit_metadata,
+                user_id=existing_dep.user_id,
+                root_dir=existing_dep.root_dir or ''
+            )
+            
+            # 3. Initiating Build/Deploy Sequence
+            # We reuse _direct_deploy but with the existing ID to ensure UPDATE semantics
             await self._send_progress_message(f"[WEBHOOK] 🎣 Received push event for {repo_url}. Initiating auto-redeployment...")
             await self._send_thought_message(f"Auto-deploy sequence started for {existing_dep.service_name}. Target commit: {commit_metadata.get('hash', 'unknown')[:7]}")
             
