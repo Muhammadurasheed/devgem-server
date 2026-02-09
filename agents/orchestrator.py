@@ -595,7 +595,9 @@ class OrchestratorAgent:
         # 2. Trigger Redeploy
         # We reuse _direct_deploy but with the existing ID to ensure UPDATE semantics
         try:
-            # Notify start (optional, maybe via websocket logic elsewhere)
+            # [FAANG] Proactive Notification
+            await self._send_progress_message(f"[WEBHOOK] 🎣 Received push event for {repo_url}. Initiating auto-redeployment...")
+            await self._send_thought_message(f"Auto-deploy sequence started for {existing_dep.service_name}. Target commit: {commit_metadata.get('hash', 'unknown')[:7]}")
             
             result = await self._direct_deploy(
                 repo_url=repo_url,
@@ -604,6 +606,9 @@ class OrchestratorAgent:
                 commit_metadata=commit_metadata,
                 root_dir=existing_dep.root_dir or ''
             )
+            
+            if result.get('success') or result.get('type') == 'message':
+                 await self._send_progress_message(f"[AUTO-DEPLOY] ✅ Successfully updated {existing_dep.service_name}")
             
             return result
             

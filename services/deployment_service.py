@@ -74,18 +74,19 @@ class DeploymentService:
         # For now, if ID matches, or if service_name matches, return existing or update.
         
         # 1. Check by explicit ID if provided
-        if deployment_id and deployment_id in self._deployments:
-            return self._deployments[deployment_id]
-            
         # 2. [FAANG] Collision Resolution: Generate unique suffix instead of overwriting
         # This ensures re-deploying the same repo creates a NEW dashboard entry
         # [FAANG] Idempotency Check: Return existing if found
         if deployment_id and deployment_id in self._deployments:
-            print(f"[DeploymentService] [IDEMPOTENT] Returning existing deployment: {deployment_id}")
+            print(f"[DeploymentService] [IDEMPOTENT] Re-deploying existing deployment: {deployment_id}")
             # Update fields that might have changed
             existing_dep = self._deployments[deployment_id]
             if env_vars:
                 existing_dep.env_vars.update(env_vars)
+            
+            # [FAANG] Reset status to trigger UI reactivity
+            print(f"[DeploymentService] Resetting status to PENDING for {deployment_id}")
+            existing_dep.status = DeploymentStatus.PENDING
             
             # [FAANG] Update Commit Metadata on Idempotent Re-deploy
             if commit_metadata:
@@ -97,6 +98,15 @@ class DeploymentService:
             
             existing_dep.updated_at = datetime.utcnow().isoformat() + "Z"
             self._save_deployments() # Ensure we save the updates!
+            
+            # [FAANG] Real-time Sync: Broadcast re-deploy intent
+            if self.broadcaster:
+                import asyncio
+                asyncio.create_task(self.broadcaster({
+                    "type": "status_change",
+                    "deployment": existing_dep.to_dict()
+                }))
+                
             return existing_dep
 
         # Name Collision Check & Dedup

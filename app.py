@@ -178,6 +178,14 @@ orchestrator = OrchestratorAgent(
     location=os.getenv('GOOGLE_CLOUD_REGION', 'us-central1')
 )
 
+# [FAANG] Enable broadcasting for the global orchestrator
+# A simple wrapper that ignores the session_id and broadcasts to all
+async def global_safe_send(session_id: str, data: dict):
+    await broadcast_to_all(data)
+
+orchestrator.safe_send = global_safe_send
+orchestrator.session_id = "global_broadcast_session"
+
 # Initialize Monitoring Agent
 async def monitoring_alert_hook(user_id: str, payload: dict):
     # Broadcast to all sessions for this user
@@ -256,6 +264,24 @@ async def broadcast_to_session(session_id: str, data: dict):
     
     print(f"[WebSocket] [ERROR] Failed to send to {session_id} after {max_retries} attempts")
     return False
+
+
+async def broadcast_to_all(data: dict):
+    """
+    [FAANG] Global Broadcast Protocol
+    Sends a message to every active WebSocket connection.
+    Used for background tasks (like GitHub webhooks) that aren't tied to a specific session.
+    """
+    if not active_connections:
+        print("[WebSocket] [INFO] No active connections for global broadcast")
+        return
+        
+    print(f"[WebSocket] 🌪️ Global broadcast: {data.get('type')} to {len(active_connections)} sessions")
+    tasks = [broadcast_to_session(sid, data) for sid in active_connections.keys()]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+# [FAANG] Wire Deployment Service to Global Broadcaster
+deployment_service.set_broadcaster(broadcast_to_all)
 
 
 # ============================================================================
