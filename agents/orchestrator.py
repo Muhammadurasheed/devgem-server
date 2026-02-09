@@ -1090,13 +1090,6 @@ class OrchestratorAgent:
                 final_link = deploy_result.get('deployment_url') or deploy_result.get('url')
                 print(f"[Orchestrator] 🚀 HEALING PULSE: Finalizing deployment {deployment_id} as LIVE")
                 
-                # Update DB directly to bypass possible mid-flow callback failures
-                await deployment_service.update_deployment_status(
-                    deployment_id=deployment_id,
-                    status=DeploymentStatus.LIVE,
-                    error_message=None
-                )
-                
                 if final_link:
                     await deployment_service.update_url(deployment_id, final_link)
                     
@@ -1108,6 +1101,13 @@ class OrchestratorAgent:
                         )
                     except Exception as preview_err:
                         print(f"[Orchestrator] Preview generation skipped: {preview_err}")
+
+                # Update DB directly to bypass possible mid-flow callback failures
+                await deployment_service.update_deployment_status(
+                    deployment_id=deployment_id,
+                    status=DeploymentStatus.LIVE,
+                    error_message=None
+                )
                 
                 # Force final UI sync for checkmarks and completion
                 if progress_notifier:
@@ -3520,10 +3520,9 @@ Your goal is to get the user from "Zero to Live URL" in under 60 seconds.
             # [SIGNAL RESTORE]: Definitive terminal pulse for WebSocket synchronization
             if progress_callback:
                 await progress_callback({
-                    'type': 'deployment_complete',
-                    'status': 'success',
-                    'deployment_id': deployment_id,
-                    'url': deploy_result['url']
+                    'type': 'message',
+                    'content': 'Finalizing deployment state...',
+                    'deployment_id': deployment_id
                 })
             
             # Calculate metrics and complete monitoring

@@ -311,6 +311,11 @@ class DeploymentService:
         
         if deployment_id in self._deployments:
             dep = self._deployments[deployment_id]
+            
+            # [FAANG] Idempotency Check: Prevent redundant broadcasts
+            old_status = dep.status
+            status_changed = (old_status != status_enum)
+            
             dep.status = status_enum  # ✅ Always assign Enum (or best effort)
             
             if error_message:
@@ -326,7 +331,8 @@ class DeploymentService:
             self._save_deployments()
             
             # [FAANG] Real-time Sync: Only broadcast for TERMINAL states to prevent premature "Live" in dashboard
-            if self.broadcaster and status_str in ["live", "failed"]:
+            # AND only if state actually changed or it's a forced completion
+            if self.broadcaster and status_str in ["live", "failed"] and status_changed:
                 import asyncio
                 event_type = "deployment_complete" if status_str == "live" else "status_change"
                 
@@ -396,17 +402,17 @@ class DeploymentService:
             self._save_deployments()
             
             # [FAANG] Real-time Sync: Broadcast URL update
-            # [FAANG] Real-time Sync: Broadcast URL update
+            # Changed to deployment_update to avoid duplicate 'success' screens
             if self.broadcaster and url:
                 import asyncio
                 # [FAANG] Safe Broadcast Wrapper
                 async def safe_url_broadcast():
                     try:
                         await self.broadcaster({
-                            "type": "deployment_complete",
+                            "type": "deployment_update", # Changed from deployment_complete
                             "deployment": dep.to_dict()
                         })
-                        print(f"[DeploymentService] [BROADCAST] deployment_complete (URL set) for {deployment_id}")
+                        print(f"[DeploymentService] [BROADCAST] deployment_update (URL set) for {deployment_id}")
                     except Exception as e:
                         print(f"[DeploymentService] [BROADCAST] URL update FAILED: {e}")
                 
