@@ -252,15 +252,19 @@ class DeploymentService:
             return True
         return False
 
-    async def update_deployment_status(self, deployment_id: str, status: str, error_message: Optional[str] = None):
+    async def update_deployment_status(self, deployment_id: str, status, error_message: Optional[str] = None):
         """Update deployment status [HEALED - STRICT ISO]"""
+        # [FAANG] Type Normalization: Handle both Enum and string status
+        # Fixes bug where DeploymentStatus.FAILED (Enum) != "failed" (string)
+        status_str = status.value if hasattr(status, 'value') else str(status)
+        
         if deployment_id in self._deployments:
             dep = self._deployments[deployment_id]
-            dep.status = status
+            dep.status = status_str
             if error_message:
                 dep.error_message = error_message
             dep.updated_at = datetime.utcnow().isoformat() + "Z"
-            if status == "live":
+            if status_str == "live":
                 dep.last_deployed = datetime.utcnow().isoformat() + "Z"
                 # [FAANG] State Reconciliation: Mark all valid stages as success
                 for stage in dep.stages:
@@ -269,9 +273,9 @@ class DeploymentService:
             self._save_deployments()
             
             # [FAANG] Real-time Sync: Only broadcast for TERMINAL states to prevent premature "Live" in dashboard
-            if self.broadcaster and status in ["live", "failed"]:
+            if self.broadcaster and status_str in ["live", "failed"]:
                 import asyncio
-                event_type = "deployment_complete" if status == "live" else "status_change"
+                event_type = "deployment_complete" if status_str == "live" else "status_change"
                 payload = {"type": event_type, "deployment": dep.to_dict()}
                 
                 # [FAANG] Safe Broadcast: Wrapped to catch silent failures

@@ -1075,7 +1075,8 @@ class GCloudService:
             log_excerpt = await asyncio.to_thread(fetch_gcs_raw)
             
             if log_excerpt:
-                self.logger.info(f"[GCloudService] ✅ Successfully fetched {len(log_excerpt.split('\n'))} log lines.")
+                line_count = len(log_excerpt.split('\n'))
+                self.logger.info(f"[GCloudService] ✅ Successfully fetched {line_count} log lines.")
                 # Log a few lines to terminal for visibility
                 tail_lines = log_excerpt.split('\n')[-5:]
                 for line in tail_lines:
