@@ -816,13 +816,23 @@ class OrchestratorAgent:
                     log_content = data.get('details') or data.get('log_excerpt') or data.get('logs')
                     
                     if log_content:
+                        # [FAANG] Noise Suppression: Filter out orchestration status lines
+                        # These provide no value to the user and clutter the Build Artifacts viewport.
+                        noise_patterns = ['git: ', 'bash: ', 'executor:latest: ', 'STATUS_UNKNOWN']
+                        
                         # Handle both list of lines and raw string
                         if isinstance(log_content, list):
                             for line in log_content:
-                                deployment_service.add_build_log(deployment_id, str(line))
+                                str_line = str(line)
+                                if any(pattern in str_line for pattern in noise_patterns):
+                                    continue
+                                deployment_service.add_build_log(deployment_id, str_line)
                         else:
-                            deployment_service.add_build_log(deployment_id, str(log_content))
+                            str_line = str(log_content)
+                            if not any(pattern in str_line for pattern in noise_patterns):
+                                deployment_service.add_build_log(deployment_id, str_line)
 
+                    status_val = data.get('status')
                     if status_val in ['success', 'error', 'live', 'failed']:
                         if status_val == 'live':
                             db_status = DeploymentStatus.LIVE

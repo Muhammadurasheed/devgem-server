@@ -2515,7 +2515,8 @@ async def get_deployment_env_vars(deployment_id: str):
     
     env_vars = await secret_sync_service.load_from_secret_manager(
         deployment_id=deployment_id,
-        user_id=deployment.user_id
+        user_id=deployment.user_id,
+        repo_url=deployment.repo_url
     )
     
     return {
