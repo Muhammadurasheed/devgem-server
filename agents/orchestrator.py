@@ -573,6 +573,44 @@ class OrchestratorAgent:
             f"or wait a few minutes and try again."
         )
     
+    async def auto_deploy(self, repo_url: str, commit_metadata: Dict[str, str]):
+        """
+        [FAANG] Smart Auto-Deploy Trigger
+        Called by Webhooks to update existing deployments with new code.
+        """
+        print(f"[Orchestrator] 🔄 Auto-Deploy triggered for {repo_url}")
+        
+        # 1. Find the target deployment
+        existing_dep = deployment_service.get_deployment_by_repo_url(repo_url)
+        
+        if not existing_dep:
+            print(f"[Orchestrator] No active deployment found for {repo_url}. Skipping auto-deploy.")
+            return {
+                "success": False, 
+                "message": "No active deployment found for this repository."
+            }
+            
+        print(f"[Orchestrator] Found target deployment: {existing_dep.service_name} ({existing_dep.id})")
+        
+        # 2. Trigger Redeploy
+        # We reuse _direct_deploy but with the existing ID to ensure UPDATE semantics
+        try:
+            # Notify start (optional, maybe via websocket logic elsewhere)
+            
+            result = await self._direct_deploy(
+                repo_url=repo_url,
+                service_name=existing_dep.service_name, # Reuse name
+                deployment_id=existing_dep.id, # Force update
+                commit_metadata=commit_metadata,
+                root_dir=existing_dep.root_dir or ''
+            )
+            
+            return result
+            
+        except Exception as e:
+            print(f"[Orchestrator] Auto-deploy failed: {e}")
+            return {"success": False, "message": str(e)}
+
     async def _sanitize_project_for_build(self, project_path: str, progress_notifier: Optional[ProgressNotifier] = None):
         """
         [FAANG] Pre-build Sanitization
@@ -625,7 +663,8 @@ class OrchestratorAgent:
         session_id: str = None,
         deployment_id: Optional[str] = None, # [FAANG] Pass-through authoritative ID
         abort_event: Optional[asyncio.Event] = None, # [FAANG] Emergency Abort Control
-        root_dir: str = '' # [FAANG] Monorepo Support
+        root_dir: str = '', # [FAANG] Monorepo Support
+        commit_metadata: Optional[Dict[str, str]] = None # [FAANG] Git History
     ) -> Dict[str, Any]:
         """
         Logic for direct deployment when intent is confirmed.
@@ -707,7 +746,8 @@ class OrchestratorAgent:
             region=self.gcloud_service.region if self.gcloud_service else 'us-central1',
             env_vars=explicit_env_vars or self.project_context.get('env_vars'), # [FAANG] Context Fallback
             root_dir=root_dir, # [FAANG] Monorepo Support
-            deployment_id=deployment_id # [FAANG] Use authoritative ID
+            deployment_id=deployment_id, # [FAANG] Use authoritative ID
+            commit_metadata=commit_metadata # [FAANG] Git History
         )
 
         # [FAANG] SECRET SYNC: Immediately push env vars to GSM

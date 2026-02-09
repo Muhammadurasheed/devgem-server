@@ -2802,6 +2802,73 @@ async def get_stats():
 # BACKGROUND MONITORING TASK (Self-Healing)
 # ============================================================================
 
+# ============================================================================
+# GITHUB WEBHOOK ENDPOINT
+# ============================================================================
+
+@app.post("/api/github/webhook")
+async def github_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    [FAANG] GitHub Webhook Receiver
+    Listens for push events and triggers auto-redeployment.
+    """
+    try:
+        # 1. Verify Event Type
+        event = request.headers.get("X-GitHub-Event", "ping")
+        if event == "ping":
+            return {"status": "pong", "message": "Webhook configured successfully"}
+        
+        if event != "push":
+            return {"status": "ignored", "reason": f"Event '{event}' ignored"}
+            
+        payload = await request.json()
+        
+        # 2. Extract Repository Info
+        repo_data = payload.get("repository", {})
+        repo_url = repo_data.get("html_url")
+        
+        if not repo_url:
+            return {"status": "error", "message": "Missing repository URL"}
+            
+        # 3. Extract Commit Info
+        commits = payload.get("commits", [])
+        if not commits:
+             return {"status": "ignored", "reason": "No commits in push"}
+             
+        # Use head commit or first commit
+        head_commit = payload.get("head_commit") or commits[0]
+        
+        commit_metadata = {
+            "hash": head_commit.get("id"),
+            "message": head_commit.get("message"),
+            "author": head_commit.get("author", {}).get("name"),
+            "date": head_commit.get("timestamp")
+        }
+        
+        print(f"[Webhook] 🎣 Received push event for {repo_url} - Commit: {commit_metadata['hash'][:7]}")
+        
+        # 4. Trigger Auto-Redeploy (Background Task)
+        # We use the global orchestrator instance
+        background_tasks.add_task(
+            orchestrator.auto_deploy, 
+            repo_url=repo_url, 
+            commit_metadata=commit_metadata
+        )
+        
+        return {
+            "status": "processing", 
+            "repo": repo_url, 
+            "commit": commit_metadata["hash"],
+            "message": "Auto-deploy triggered in background"
+        }
+        
+    except Exception as e:
+        print(f"[Webhook] ❌ Error processing payload: {e}")
+        # Return 500 to signal GitHub to retry, or 200 to avoid retry loops if logic error
+        # FAANG practice: Return 200 for logic errors to stop retries, 500 for transient
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def monitor_deployments():
     """Background task to watch over deployments (FAANG Guardian Mode)"""
     print("[Monitor] 🛡️ Guardian Active: Monitoring deployments...")
