@@ -800,10 +800,15 @@ class OrchestratorAgent:
                         else:
                             deployment_service.add_build_log(deployment_id, str(log_content))
 
-                    status_val = data.get('status')
                     if status_val in ['success', 'error', 'live', 'failed']:
-                        if status_val == 'success' or status_val == 'live':
+                        if status_val == 'live':
                             db_status = DeploymentStatus.LIVE
+                        elif status_val == 'success':
+                            # [FAANG] Only mark LIVE if the terminal stage is successful
+                            if data.get('stage') == 'cloud_deployment':
+                                db_status = DeploymentStatus.LIVE
+                            else:
+                                db_status = DeploymentStatus.BUILDING
                         elif status_val == 'error' or status_val == 'failed':
                             db_status = DeploymentStatus.FAILED
                         else:
@@ -2604,8 +2609,14 @@ Your goal is to get the user from "Zero to Live URL" in under 60 seconds.
             if data.get('status') in ['success', 'error', 'live', 'failed']:
                 try:
                     status_val = data.get('status')
-                    if status_val == 'success' or status_val == 'live':
+                    if status_val == 'live':
                         db_status = DeploymentStatus.LIVE
+                    elif status_val == 'success':
+                        # [FAANG] Only mark LIVE if the terminal stage is successful
+                        if data.get('stage') == 'cloud_deployment':
+                            db_status = DeploymentStatus.LIVE
+                        else:
+                            db_status = DeploymentStatus.BUILDING
                     elif status_val == 'error' or status_val == 'failed':
                         db_status = DeploymentStatus.FAILED
                     else:
