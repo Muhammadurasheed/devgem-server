@@ -27,8 +27,9 @@ COPY --from=builder /root/.local /home/appuser/.local
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Ensure data directory exists and is writable by non-root user
-RUN mkdir -p data && chown -R appuser:appuser data
+# Ensure required directories exist and are writable by non-root user
+RUN mkdir -p data previews branding_assets && \
+    chown -R appuser:appuser data previews branding_assets
 
 # Switch to non-root user
 USER appuser
